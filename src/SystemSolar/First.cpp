@@ -1,74 +1,185 @@
+#include <cmath>
 #include <iostream>
 #include <string>
-#include <vector>
 
+template <typename T, typename TagT>
+class StrongType
+{
+public:
+    explicit constexpr StrongType(T v)
+    : mValue{v}
+    {
+    }
 
+    constexpr StrongType(StrongType const&) = default;
+    constexpr StrongType(StrongType&&) = default;
+    constexpr StrongType& operator=(StrongType const&) = default;
+    constexpr StrongType& operator=(StrongType&&) = default;
+
+   constexpr T get() const
+   {
+        return mValue;
+   }
+
+    friend constexpr StrongType operator+(StrongType a, StrongType b)
+    {
+        return StrongType{a.mValue + b.mValue};
+    }
+
+    friend constexpr StrongType operator-(StrongType a, StrongType b)
+    {
+        return StrongType{a.mValue - b.mValue};
+    }
+
+    friend constexpr StrongType operator*(StrongType a, T k)
+    {
+        return StrongType{a.mValue * k};
+    }
+
+    friend constexpr StrongType operator*(T k, StrongType a)
+    {
+        return StrongType{k * a.mValue};
+    }
+
+    friend constexpr StrongType operator/(StrongType a, T k)
+    {
+        return StrongType{a.mValue / k};
+    }
+
+private:
+    T mValue{};
+};
 
 template <typename T>
-struct Vector 
+struct Vector
 {
-    T x = 0;
-    T y = 0;
+    T x{};
+    T y{};
 
-    Vector<T> operator+(const Vector<T>& other) const 
+    constexpr Vector() = default;
+
+    // Permite Vector<Meters>{0.0, 0.0}
+    template <typename U>
+    constexpr Vector(U x_, U y_)
+    : x{T{x_}}
+    , y{T{y_}}
     {
-        return {x + other.x, y + other.y};
     }
 
-    Vector<T> operator-(const Vector<T>& other) const 
+    constexpr Vector(T x_, T y_)
+    : x{x_}
+    , y{y_}
     {
-        return {x - other.x, y - other.y};
     }
 
-    Vector<T> operator*(T other) const 
+    constexpr Vector& operator+=(Vector const& o)
     {
-        return {x * other, y * other};
+        x = x + o.x;
+        y = y + o.y;
+        return *this;
+    }
+    constexpr Vector& operator-=(Vector const& o)
+    {
+        x = x - o.x;
+        y = y - o.y;
+        return *this;
     }
 
-     Vector<T> operator/(T other) const 
+    constexpr Vector operator*(double k) const
     {
-        return {x / other, y / other};
+        return {x * k, y * k};
+    }
+    constexpr Vector operator/(double k) const
+    {
+        return {x / k, y / k};
     }
 
+    friend constexpr Vector operator*(double k, Vector const& v)
+    {
+        return v * k;
+    }
 };
 
-using Vec = Vector<double>;
-    
-struct Body 
+inline double magnitude(Vector<double> const& v)
 {
-    std::string name;
-    double mass;       
-    Vec position;  
-    Vec velocity;  
-};
-
-// Constante gravitacional
-const double G = 6.67430e-11;
-
-Vec gravityForce(const Body& a, const Body& b)
+    return std::sqrt(v.x * v.x + v.y * v.y);
+}
+inline Vector<double> normalize(Vector<double> const& v)
 {
-    //vector diference a to b
-    Vec diff= b.position - a.position;
-
-    //distance
-    double dist = std::sqrt(diff.x * diff.x + diff.y * diff.y);
-
-    // TODO: calcular distancia y normalizar vector
-    Vec unit = diff * (1.0 / dist);
-    // TODO: aplicar fórmula de Newton: F = G * m1 * m2 / r^2
-    double forceMag= G*((a.mass * b.mass)) / (dist * dist);
-    // TODO: devolver fuerza como vector
-    return unit * forceMag;
+    double m = magnitude(v);
+    if (m == 0.0)
+    {
+        return {0.0, 0.0};
+    }
+    else
+    {
+        return v / m;
+    }
 }
 
-int main() 
+struct MetersTag
 {
-    Body sun{"Sol", 1.99e30, {0, 0}, {0, 0}};
-    Body earth{"Tierra", 5.97e24, {1.5e11, 0}, {0, 29780}}; // 29.78 km/s
+};
+struct SecondsTag
+{
+};
+struct KilogramsTag
+{
+};
+struct NewtonsTag
+{
+};
+struct MetersPerSecondTag
+{
+};
+
+using Meters = StrongType<double, MetersTag>;
+using Seconds = StrongType<double, SecondsTag>;
+using Kilograms = StrongType<double, KilogramsTag>;
+using Newtons = StrongType<double, NewtonsTag>;
+using MetersPerSecond = StrongType<double, MetersPerSecondTag>;
+
+using PositionVec = Vector<Meters>;
+using VelocityVec = Vector<MetersPerSecond>;
+using ForceVec = Vector<Newtons>;
+using Vec = ForceVec;
+
+struct Body
+{
+    std::string name;
+    Kilograms mass;
+    PositionVec position;
+    VelocityVec velocity;
+};
+
+// Constant gravitational
+constexpr double G = 6.67430e-11;
+
+Vec gravityForce(Body const& a, Body const& b)
+{
+    double const aux = 0.0;
+    double const dx = b.position.x.get() - a.position.x.get();
+    double const dy = b.position.y.get() - a.position.y.get();
+
+    Vector<double> const diff{dx, dy};
+    double const dist2 = (diff.x * diff.x) + (diff.y * diff.y);
+    if (dist2 == aux)
+    {
+        return {aux, aux}; 
+    }
+
+    double const dist = std::sqrt(dist2);
+    Vector<double> const unit = diff / dist; 
+    Newtons const forceMag{G * (a.mass.get() * b.mass.get()) / dist2};
+
+    return {forceMag * unit.x, forceMag * unit.y};
+}
+
+int main()
+{
+    Body sun{"Sol", Kilograms{1.99e30}, PositionVec{0.0, 0.0}, VelocityVec{0.0, 0.0}};
+    Body earth{"Tierra", Kilograms{5.97e24}, PositionVec{1.5e11, 0.0}, VelocityVec{0.0, 29780.0}}; // 29.78 km/s
 
     Vec force = gravityForce(sun, earth);
-
-    std::cout << "Fuerza sobre la Tierra debido al Sol: (" << force.x << ", " << force.y << ") N\n";
-
-    return 0;
+    std::cout << "Fuerza sobre la Tierra debido al Sol: " << force.x.get() << ", " << force.y.get() << ") N\n";
 }
